@@ -1,0 +1,25 @@
+#!/bin/bash
+SINK=$( pacmd list-sinks | grep -E "^ *\*" | sed -e 's,^[^0-9]*\([0-9][0-9]*\).*,\1,' )
+CARD=$( pacmd list-sinks | awk "/^ *\*/,0" | grep card: | sed -e 's,^[^0-9]*\([0-9][0-9]*\).*,\1,' )
+ACTIVE_PROFILE=$( pactl list cards | awk "/^Card #$CARD/,/^$/" | grep "Active Profile" | sed 's/^[^:]*: //' )
+NEXT_PROFILE=$( pactl list cards | awk "/^Card #$CARD/,/^$/" | awk "/Profiles:/,/Active Profile/" | tail +2 | grep -v Active | grep -v "off:" | grep -v "sinks: 0" | { a="$(</dev/stdin)";  echo "$a"; echo "$a"; } | grep $ACTIVE_PROFILE: -A1 -m1 | tail -1 | sed 's/^[[:space:]]*\([^ ]*\): .*/\1/' )
+
+case $BLOCK_BUTTON in
+  1) pactl set-sink-mute @DEFAULT_SINK@ toggle ;;  # left click, mute/unmute
+  2) pactl set-sink-volume @DEFAULT_SINK@ 0dB && pactl set-sink-volume @DEFAULT_SINK@ -30dB ;; # middle click, reset to -30dB
+  3) pactl set-card-profile $CARD $NEXT_PROFILE && ACTIVE_PROFILE=$NEXT_PROFILE;;  # right click, cycle through profiles
+  4) pactl set-sink-volume @DEFAULT_SINK@ +1.5dB ;; # scroll up, increase
+  5) pactl set-sink-volume @DEFAULT_SINK@ -1.5dB ;; # scroll down, decrease
+esac
+
+SINKS=$(  )
+SOURCES=$(  )
+VOLUME=$( pactl list sinks | awk "/^Sink #$SINK/,/^$/" | grep "^[[:space:]]*Volume:" | sed -e 's,.* \([-0-9.]*\( dB\|%\)\).*,\1,' | sed -e 's,\.\([0-9]\)[0-9]* dB,.\1 dB,' )
+[[ `pactl list cards | awk "/^Card #$CARD/,/^$/" | grep "$ACTIVE_PROFILE:" | sed 's/.*sinks: \([0-9]*\).*/\1/'` -gt 0 ]] && SPEAKER="🔈"
+[[ `pactl list cards | awk "/^Card #$CARD/,/^$/" | grep "$ACTIVE_PROFILE:" | sed 's/.*sources: \([0-9]*\).*/\1/'` -gt 0 ]] && MIC="🎤"
+[[ `pacmd list-sinks | awk "/^ *\*/,0" | grep "device.icon_name" | sed 's/.*= "\([^"]*\)".*/\1/'` == "audio-headset-bluetooth" ]] && SPEAKER="🎧"
+echo "$SPEAKER$MIC $VOLUME"
+echo "$SPEAKER$MIC $VOLUME"
+if pactl list sinks | awk "/^Sink #$SINK/,/^$/" | grep 'Mute: yes' > /dev/null; then
+	exit 33
+fi
